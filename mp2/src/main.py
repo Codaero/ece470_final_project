@@ -83,10 +83,22 @@ def run_model():
                 plt.figure("Acceleration vs Time")
                 x = np.arange(len(acceleration_data))
                 plt.plot(x, acceleration_data)
+                plt.ylabel("Acceleration (Meters/second^2)")
+                plt.xlabel("Time (seconds)")
                 
                 plt.figure("Velocity vs Time")
                 x = np.arange(len(velocity_data))
                 plt.plot(x, velocity_data)
+                plt.ylabel("Velocity (meters/second)")
+                plt.xlabel("Time (seconds)")
+                
+                plt.figure("Velocity Error vs Time")
+                velocity_errors = controller.getVelocityErrors()
+                x = np.arange(len(velocity_errors))
+                plt.plot(x, velocity_errors)
+                plt.ylabel("Velocity (meters/second)")              
+                plt.xlabel("Time (seconds)")
+                
 
                 plt.show()
                 return True, pos_idx, total_time

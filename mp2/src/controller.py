@@ -10,7 +10,9 @@ import math
 from util import euler_to_quaternion, quaternion_to_euler
 import time
 
-PLOT = True
+PLOT = False
+
+CONTROLLER = 1 # 0 for regular and 1 for PID
 
 interp_waypoints = []
 interp_waypoints_index = 0
@@ -19,6 +21,26 @@ interp_waypoints_index = 0
 LD_SPEED_FACTOR = 0.8
 MIN_LD = 1
 MAX_LD = 20
+MAX_VEL = 10
+
+
+class PID:
+    """ Simple PID controller """
+
+    def __init__(self, kp, ki, kd):
+        self.kp = kp  # Proportional gain
+        self.ki = ki  # Integral gain
+        self.kd = kd  # Derivative gain
+        self.integral = 0
+        self.prev_error = 0
+
+    def update(self, error, dt):
+        """ Update PID control output based on error and elapsed time dt """
+        self.integral += error * dt
+        derivative = (error - self.prev_error) / dt
+        output = self.kp * error + self.ki * self.integral + self.kd * derivative
+        self.prev_error = error
+        return output
 
 class vehicleController():
     # static variable
@@ -29,6 +51,8 @@ class vehicleController():
         self.prev_vel = 0
         self.L = 0.5 # Wheelbase, can be get from gem_control.py
         self.log_acceleration = True
+        self.pid = PID(0.2, 0.2, 0.2)
+        self.velocity_errors = []
         
 
     def getModelState(self):
@@ -89,31 +113,50 @@ class vehicleController():
     # Task 2: Longtitudal Controller
     # Based on all unreached waypoints, and your current vehicle state, decide your velocity
     def longititudal_controller(self, curr_x, curr_y, curr_vel, curr_yaw, future_unreached_waypoints):
-        # Parameters
-        MAX_VEL = 10
-        C = 4 # Ved's number (keep target whithin C of current velocity)
-        K = 110 * (np.pi / 24) # Initially chosen to be pi/24, but experimentally tested to fit in the right bounds
+        # Controller Scheme 0
+        
+        target_velocity = None
+        
+        if CONTROLLER == 0:
+            # Parameters
+            C = 4 # Ved's number (keep target whithin C of current velocity)
+            K = 110 * (np.pi / 24) # Initially chosen to be pi/24, but experimentally tested to fit in the right bounds
 
-        ####################### TODO: Your TASK 2 code starts Here #######################
+            ####################### TODO: Your TASK 2 code starts Here #######################
 
-        # Use static look ahead distance of 2 waypoints
-        if len(future_unreached_waypoints) >= 2:
-            target_point = future_unreached_waypoints[1]
-        else:
-            target_point = future_unreached_waypoints[0] # Eliminate crash at the end of waypoints
+            # Use static look ahead distance of 2 waypoints
+            if len(future_unreached_waypoints) >= 2:
+                target_point = future_unreached_waypoints[1]
+            else:
+                target_point = future_unreached_waypoints[0] # Eliminate crash at the end of waypoints
 
-        # Calculate the alpha angle
-        curr_pos = np.array([curr_x, curr_y])
-        alpha = self.get_alpha(curr_pos, target_point, curr_yaw)
+            # Calculate the alpha angle
+            curr_pos = np.array([curr_x, curr_y])
+            alpha = self.get_alpha(curr_pos, target_point, curr_yaw)
 
-        # Adjust the target velocity based on the angle (larger angle -> smaller target_velocity)
-        speed_control = MAX_VEL - K * abs(alpha)
-        speed_control = max(0, speed_control)
-        speed_control = np.clip(speed_control, curr_vel - C, curr_vel + C) # Keep target velocity within +-C 
+            # Adjust the target velocity based on the angle (larger angle -> smaller target_velocity)
+            speed_control = MAX_VEL - K * abs(alpha)
+            speed_control = max(0, speed_control)
+            speed_control = np.clip(speed_control, curr_vel - C, curr_vel + C) # Keep target velocity within +-C 
 
-        # print("Current Velocity: ", curr_vel)
-        target_velocity = speed_control / 3
-
+            target_velocity = speed_control / 3
+            
+        elif CONTROLLER == 1:
+                
+            # Controller Scheme #1
+            target_velocity = 1
+            velocity_error = target_velocity - curr_vel
+            
+            self.velocity_errors.append(velocity_error)
+            
+            pid_adjustment = self.pid.update(velocity_error, 0.01)
+            
+            adjusted_target_velocity = curr_vel + pid_adjustment
+            
+            adjusted_target_velocity = np.clip(adjusted_target_velocity, 0, MAX_VEL)
+            
+            target_velocity = adjusted_target_velocity
+        
         ####################### TODO: Your TASK 2 code ends Here #######################
         return target_velocity
 
@@ -215,3 +258,6 @@ class vehicleController():
         newAckermannCmd = AckermannDrive()
         newAckermannCmd.speed = 0
         self.controlPub.publish(newAckermannCmd)
+        
+    def getVelocityErrors(self):
+        return self.velocity_errors
