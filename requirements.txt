@@ -1,0 +1,10 @@
+numpy==1.24.4
+prefetch_generator
+scipy
+tqdm
+yacs
+opencv-python
+scikit-image
+torch
+torchvision
+torchaudio
